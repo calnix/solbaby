@@ -1,66 +1,58 @@
-## Foundry
+# Funding structure
+    Modes: pledge then public, pledgersOnly, publicOnly
+    
+    Example:
+     1) Pledge period: 0 - 0.5 | you get what you get
+     - stakers can pledge capital to buy in advance, e.g. 3 days.
+     - can pledge, cannot collect.
+     - pledgers must meet min. stk Token holding.
+     - pledge as per min/max buyAmounts.
+     - min/max buyAmounts calc: tokenSaleQty / totalStkTokens(in cir) * userStkTokens
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+     2) Pledge period: 0.5 - 1 | you want more
+     - if leftover, free for all mode for stkToken holders
+     - no min. stk Token holding. as long you hold some, can.
 
-Foundry consists of:
+     3) Public: | whatever happens, happens
+     - if leftover from pledging, free for all for anyone
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+    Paramters: 
+    - mode type
+    - duration of pledge round, public round
+    - mode buy limits (pledge & public)
 
-## Documentation
+    Calc:
+    - call balanceOf(): userBalance > minRequiredBalance
+    - alloc: tokenSaleQty / totalStkTokens(> minRequire) * userStkTokens
+           ~ pledgeAllocationPerStaked * userStkTokens
+    - admin needs to specify pledgeAllocationPerStaked: 
+        for each unit of staked tokens, how much alloc?
+    
+     
+# Participation structure
+    To be a valid pledger: min stkTokens
 
-https://book.getfoundry.sh/
+     2) how much can they buy per round? 
+        - tiers, tierReq, tierAlloc -> whitelist mode
+        - minBuy, maxBuy for everyone -> public mode
 
-## Usage
+        whitelisted users are token holders tt pledged capital in advance.
+        can collect pledge tokens anytime after raise.
+        
 
-### Build
+ # Recording
+     - track each purchase in each round w/ mapping
+     - to allow for refunds
+     = to allow for vested calims
 
-```shell
-$ forge build
-```
+# Vesting & Lockup
+     - VestingReleaseType
 
-### Test
+  
 
-```shell
-$ forge test
-```
-
-### Format
-
-```shell
-$ forge fmt
-```
-
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+1. cache structs
+2. get period & mode
+3. validate buy against period limits
+- given period/mode check if stkTokens needed and held
+- check if buy is within limits
+4. transfer tokens 
