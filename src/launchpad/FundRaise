@@ -33,7 +33,7 @@ contract FundRaise {
 
     // Record of user's purchases 
     mapping(address user =>uint256 amount) internal pledgePurchases;     // record of sales in pledge round 
-    mapping(address user =>uint256 amount) internal publicPurchases;    // record of sales in publc round 
+    mapping(address user =>uint256 amount) internal publicPurchases;    // record of sales in public round 
 
     // States
     bool public isCancelled;  
@@ -41,7 +41,7 @@ contract FundRaise {
     bool public finishUpSuccess; 
 
 
-    function initialize() external  {}
+    function initialize() external {}
 
     function getState() external {
 
@@ -148,7 +148,7 @@ contract FundRaise {
     }
 
     // commit funding in ether or specified ccy
-    // create a buy for each mode
+    // create a buy for each period
     // cache required variables based on mode, then pass into the buy()
     function commit(uint256 amount) external payable {
         //getState: fund raise must be active: not paused, not ended

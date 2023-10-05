@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 
-interface FundingFactory {
+interface IFundingFactory {
 
-    function setStakingToken() external view returns {address}
+    function setStakingToken() external view returns (address);
 
-    function getStakingToken() external view returns {address}
+    function getStakingToken() external view returns (address);
 }
