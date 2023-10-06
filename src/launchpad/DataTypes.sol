@@ -35,13 +35,15 @@ library DataTypes {
     }
 
     struct raiseStructure {
+        RaiseMode raiseMode;        //uint8
+
         // whitelist-guaranteed
         uint256 whitelistStart;
         uint256 whitelistFFAStart;
         uint256 whitelistEnd;
         
         uint256 whitelistRoundAllocation;
-        uint256 whitelistStakeRequirement;
+        uint256 whitelistMinRequiredTokens;
         uint256 whitelistAllocationPerUnitStaked;  // in asset units
         
         // whitelist-FFA: units in raiseCurrency

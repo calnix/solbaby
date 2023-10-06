@@ -14,6 +14,7 @@ import {Errors} from "src/libraries/Error.sol";
 
 contract Raise {
     using SafeERC20 for ERC20;
+    using SafeERC20 for IERC20;
 
     //external contracts
     IERC20 public assetToken;
@@ -56,41 +57,41 @@ contract Raise {
             userAmount = amount;
         }
         
-        // Check period + whitelist requirements 
+        //2. Check period + whitelist requirements 
         // if whitelist period: user must hold minRequiredTokens
-        bool isUserEligible;
-        uint256 userStakedBalance;
         DataTypes.Period currentPeriod = _getPeriod(raiseStructureCached);
+        
+        bool isUserEligible; uint256 userStakedBalance;
         if(currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
 
-            (isUserEligible, userStakedBalance) = _checkRequiredTokens(msg.sender, raiseStructureCached.pledgeMinRequiredTokens);
+            (isUserEligible, userStakedBalance) = _checkRequiredTokens(msg.sender, raiseStructureCached.whitelistMinRequiredTokens);
             require(isUserEligible, "User ineligible");
         }
 
-        // 2. validate buy
+        // 3. validate buy
         uint256 amountToBuy = ValidationLogic._validateBuy(raiseStructureCached, raiseProgressCached, _whitelistPurchases, _publicPurchases, currentPeriod, userAmount, userStakedBalance);
 
-        // 3. update state
+        // 4. update state
          if(currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
             
             _whitelistPurchases[msg.sender] += amountToBuy;  
-            raiseProgressCached.allocationSoldInPledge += amountToBuy; 
+            raiseProgressCached.whitelistRoundAllocationSold += amountToBuy; 
 
-            raiseProgressCached.capitalRaisedInPledge += amountToBuy;   
+            raiseProgressCached.whitelistRoundCapitalRaised += amountToBuy;   
             // emit
         } 
         
         if (currentPeriod == DataTypes.Period.PUBLIC) {
             
             _publicPurchases[msg.sender] += amountToBuy;
-            raiseProgressCached.allocationSoldInPublic += amountToBuy;  
+            raiseProgressCached.publicRoundAllocationSold += amountToBuy;  
 
-            raiseProgressCached.capitalRaisedInPledge += amountToBuy;   
+            raiseProgressCached.publicRoundCapitalRaised += amountToBuy;   
             // emit
         }
 
-        // 4. transfers
-        _transferIn(amountToBuy, fundingInfoCached.raiseInNative, fundingInfoCached.currency);
+        // 5. transfers
+        _transferIn(amountToBuy, fundingInfoCached.raiseInNative, fundingInfoCached.raiseCurrency);
             //raiseProgressCached.capitalRaisedInPledge += ;  
 
     }
@@ -99,7 +100,7 @@ contract Raise {
     function claim() external {}
 
     // cache structs into mem
-    function _cache() internal returns(DataTypes.fundingInfo fundingInfo, DataTypes.raiseStructure raiseStructure, DataTypes.raiseProgress raiseProgress) {
+    function _cache() internal returns(DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructure, DataTypes.raiseProgress memory raiseProgress) {
  
         DataTypes.fundingInfo memory fundingInfoCached = fundingInfo;
         DataTypes.raiseStructure memory raiseStructureCached = raiseStructure;
@@ -109,7 +110,7 @@ contract Raise {
     }
 
     // check what period we are in
-    function _getPeriod(DataTypes memory raiseStructureCached) internal returns(DataTypes.Period) {
+    function _getPeriod(DataTypes.raiseStructure memory raiseStructureCached) internal returns(DataTypes.Period) {
 
         DataTypes.RaiseMode raiseMode = raiseStructureCached.raiseMode;
         
@@ -124,7 +125,7 @@ contract Raise {
 
         if (raiseMode == DataTypes.RaiseMode.WHITELIST_THEN_PUBLIC) {
             // validate blocktime
-            require(whitelistStart <= block.timestamp <= publicEnd, "Raise over");
+            require(whitelistStart <= block.timestamp && block.timestamp <= publicEnd, "Invalid Period");
 
             if(block.timestamp < whitelistFFAStart) {
                 // in guaranteed round
@@ -144,39 +145,36 @@ contract Raise {
 
         if(raiseMode == DataTypes.RaiseMode.WHITELIST_ONLY) {
             // validate blocktime
-            require(whitelistStart <= block.timestamp <= publicEnd, "Raise over");
+            require(whitelistStart <= block.timestamp && block.timestamp <= whitelistEnd, "Invalid Period");
 
             if(block.timestamp < whitelistFFAStart) {
-                // in pledgeG mode
-
+                // in guaranteed round
                 return DataTypes.Period.WHITELIST_GUARANTEED;
             }
 
             if(block.timestamp < whitelistEnd) {
-                // in pledger's FFA mode
-
+                // in whitelisted FFA round
                 return DataTypes.Period.WHITELIST_FFA;
             }
         }
 
         if(raiseMode == DataTypes.RaiseMode.PUBLIC_ONLY) {               
-            require(publicStart <= block.timestamp < publicEnd, "Raise over");
-
-            // in pledger's FFA mode
+            require(publicStart <= block.timestamp && block.timestamp <= publicEnd, "Invalid Period");
             return DataTypes.Period.PUBLIC;
         }
     }
 
     // check if user has at least minRequiredTokens
-    function _checkRequiredTokens(address user, uint256 minRequiredTokens) public view returns(bool, uint256) {
-        // if set to 0 during init, no requirement
-        if (minRequiredTokens == 0) {
-            return true;
-        } 
-
-        uint256 userBalance = stakingToken.balanceOf(user);
+    function _checkRequiredTokens(address user, uint256 whitelistMinRequiredTokens) public view returns(bool, uint256) {
         
-        return (userBalance >= minRequiredTokens, userBalance);
+        uint256 userBalance = stakingToken.balanceOf(user);
+
+        // if set to 0 during init, no requirement
+        if (whitelistMinRequiredTokens == 0) {
+            return (true, userBalance);
+        } 
+        
+        return (userBalance >= whitelistMinRequiredTokens, userBalance);
     }
 
         // get payment
@@ -186,7 +184,7 @@ contract Raise {
             require(amount <= msg.value, "Insufficient msg.value");
             
             //return excess
-            remainder = msg.value - amount;
+            uint256 remainder = msg.value - amount;
             if(remainder) msg.sender.call{value: remainder}("");
 
         } else {

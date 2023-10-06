@@ -8,11 +8,12 @@ import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/Safe
 import {DataTypes} from "src/launchpad/DataTypes.sol";
 
 library ValidationLogic {
+
     // based on mode, check period
     // based on period, check if minTokens
     // based on period, check min/max buyLimits
     function _validateBuy(
-        DataTypes memory raiseStructureCached,
+        DataTypes.raiseStructure memory raiseStructureCached,
         DataTypes.raiseProgress memory raiseProgressCached,
         mapping(address user => uint256 amount) storage _whitelistPurchases,
         mapping(address user => uint256 amount) storage _publicPurchases,
@@ -20,8 +21,9 @@ library ValidationLogic {
         uint256 userAmount,
         uint256 userStakedBalance
     ) internal returns (uint256) {
+
         //check available allocation
-        uint256 availableAllocation = _getAvailableAllocation(raiseProgressCached, currentPeriod);
+        uint256 availableAllocation = _getAvailableAllocation(raiseStructureCached, raiseProgressCached, currentPeriod);
         require(availableAllocation > 0, "Sold out");
 
         // check buyLimits
@@ -39,24 +41,27 @@ library ValidationLogic {
             bought = _whitelistPurchases[msg.sender];
         }
 
-        if (currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED) {
+        if (currentPeriod == DataTypes.Period.PUBLIC) {
             bought = _publicPurchases[msg.sender];
         }
 
-        uint256 userRemaining = maxBuy - (bought + userAmount);
-        require(userRemaining > 0, "userAmount dishonors maxBuy");
-
-        // rebase userAmount to remainder
-        userAmount = userAmount > userRemaining ? userRemaining : userAmount;
+        if(maxBuy > 0){
+            uint256 userRemaining = maxBuy - (bought + userAmount);
+            require(userRemaining > 0, "userAmount dishonors maxBuy");
+            
+            // rebase userAmount to remainder
+            userAmount = userAmount > userRemaining ? userRemaining : userAmount;
+        }
 
         return userAmount;
     }
 
     function _getAvailableAllocation(
-        DataTypes memory raiseStructureCached,
+        DataTypes.raiseStructure memory raiseStructureCached,
         DataTypes.raiseProgress memory raiseProgressCached,
         DataTypes.Period currentPeriod
     ) internal returns (uint256) {
+
         uint256 availableAllocation;
 
         if (currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
@@ -90,6 +95,7 @@ library ValidationLogic {
         }
 
         if (period == DataTypes.Period.WHITELIST_FFA) {
+            // may be 0 values
             minBuy = raiseStructureCached.whitelistFFAMinBuyLimit;
             maxBuy = raiseStructureCached.whitelistFFAMaxBuyLimit;
 
@@ -102,5 +108,32 @@ library ValidationLogic {
 
             return (minBuy, maxBuy);
         }
+    }
+
+    function _updateState(
+        uint256 amountToBuy,
+        DataTypes.Period currentPeriod, 
+        mapping(address user => uint256 amount) storage _whitelistPurchases,
+        mapping(address user => uint256 amount) storage _publicPurchases
+    ) internal {
+
+        if(currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
+            
+            _whitelistPurchases[msg.sender] += amountToBuy;  
+            raiseProgressCached.whitelistRoundAllocationSold += amountToBuy; 
+
+            raiseProgressCached.whitelistRoundCapitalRaised += amountToBuy;   
+            // emit
+        } 
+        
+        if (currentPeriod == DataTypes.Period.PUBLIC) {
+            
+            _publicPurchases[msg.sender] += amountToBuy;
+            raiseProgressCached.publicRoundAllocationSold += amountToBuy;  
+
+            raiseProgressCached.publicRoundCapitalRaised += amountToBuy;   
+            // emit
+        }
+
     }
 }

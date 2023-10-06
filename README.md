@@ -56,3 +56,11 @@
 - given period/mode check if stkTokens needed and held
 - check if buy is within limits
 4. transfer tokens 
+
+
+
+# Functions
+
+- add invariant test function
+- called after deployment to check global relations
+whitelistStart < publicStart
