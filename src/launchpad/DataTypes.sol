@@ -26,9 +26,10 @@ library DataTypes {
         uint256 hardCap;   // Unit in raise currency
         
         // financing
-        bool raiseInNative;           // can remove - potentially
-        address raiseCurrency;        // raise currency, if not raising in ether
-        
+        //bool raiseInNative;                 // can remove - potentially
+        address raiseCurrency;                // raise currency, if not raising in ether
+        uint256 raiseCurrencyDecimals;        // precision
+
         // fees
         address stkTokenAddress;    // stkToken - for pledgers
         uint256 feePercent;         // platform fee In 1e18
@@ -43,10 +44,11 @@ library DataTypes {
         uint256 whitelistEnd;
         
         uint256 whitelistRoundAllocation;
-        uint256 whitelistMinRequiredTokens;
+        uint256 whitelistMinRequiredTokens;        // staked tokens
         uint256 whitelistAllocationPerUnitStaked;  // in asset units
+        uint256 whitelistAllocationUnitPrice;       // in raise CCY or native
         
-        // whitelist-FFA: units in raiseCurrency
+        // per wallet limits: Units of ICO Token
         uint256 whitelistFFAMinBuyLimit;       // if 0 no limits
         uint256 whitelistFFAMaxBuyLimit;       // if 0 no limits
         
@@ -54,7 +56,9 @@ library DataTypes {
         uint256 publicStart; 
         uint256 publicEnd;   
         uint256 publicRoundAllocation;
-        // per wallet limits: Unit in raiseCurrency
+        uint256 publicAllocationUnitPrice;       // in raise CCY or native
+
+        // per wallet limits: Units of ICO Token
         uint256 publicMinBuyLimit;  
         uint256 publicMaxBuyLimit;  
     }
@@ -63,8 +67,8 @@ library DataTypes {
     struct raiseProgress {
         
         // whitelist mode    
-        uint256 whitelistRoundAllocationSold;
-        uint256 whitelistRoundCapitalRaised;
+        uint256 whitelistRoundAllocationSold;   // units of ICO token
+        uint256 whitelistRoundCapitalRaised;    // units of raiseCCY
 
         // public mode
         uint256 publicRoundAllocationSold;
@@ -75,14 +79,12 @@ library DataTypes {
         uint256 totalCapitalRaised;   // in raise cccy
     }
 
-    struct PurchaseDetail {
-        uint guaranteedAmount;
-        uint lotteryAmount;
-        uint overSubscribeAmount;
-        uint liveWlFcfsAmount;
-        uint livePublicAmount;
-        uint total;
-        bool hasReturnedFund;
+    struct SalesOrder {
+        uint256 whitelistAmount;
+        uint256 publicAmount;
+        //uint256 total;
+        uint256 capitalCommitted;
+        //bool hasReturnedFund;
     }
 
     enum RaiseMode {

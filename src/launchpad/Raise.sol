@@ -21,21 +21,21 @@ contract Raise {
     IERC20 public stakingToken;
 
     address public treasury; 
-    IFundingFactory public factory;
+    IFundingFactory public factory;  
     
     // Funding + Raise + Progess
     DataTypes.fundingInfo internal _fundingInfo;
     DataTypes.raiseStructure internal _raiseStructure;
     DataTypes.raiseProgress internal _raiseProgress;
 
-    // Record of user's purchases 
-    mapping(address user => uint256 amount) internal _whitelistPurchases;     // record of sales in whitelist round 
-    mapping(address user => uint256 amount) internal _publicPurchases;        // record of sales in publc round 
-
+    // Record of user's purchases:unit in ICO tokens 
+    mapping(address user => DataTypes.SalesOrder salesOrder) internal _sales;     
+    
     // commit funding in ether or specified ccy
     // create a buy for each period
     // cache required variables based on mode, then pass into the buy()
-    function commit(uint256 amount) external payable {
+    ///@param amount Amount of ICO Tokens to buy
+    function buy(uint256 amount) external payable {
         //getState: fund raise must be active: not paused, not ended
         //require(_isActive(), "Not active"); 
 
@@ -44,18 +44,8 @@ contract Raise {
             DataTypes.raiseStructure memory raiseStructureCached, 
             DataTypes.raiseProgress memory raiseProgressCached) = _cache();
 
-        // Check payment mode && check user's amount
-        uint256 userAmount;
-        if(fundingInfoCached.raiseInNative == true) {
-            // paying in native 
-            require(msg.value > 0, "Invalid msg.value");
-            userAmount = msg.value;
-
-        } else {
-            // paying in tokens
-            require(amount > 0);
-            userAmount = amount;
-        }
+        //maybe: depending in support nativeCCY
+        //_checkPayment(fundingInfoCached, amount);
         
         //2. Check period + whitelist requirements 
         // if whitelist period: user must hold minRequiredTokens
@@ -69,30 +59,16 @@ contract Raise {
         }
 
         // 3. validate buy
-        uint256 amountToBuy = ValidationLogic._validateBuy(raiseStructureCached, raiseProgressCached, _whitelistPurchases, _publicPurchases, currentPeriod, userAmount, userStakedBalance);
+        uint256 amountToBuy = ValidationLogic._validateBuy(raiseStructureCached, raiseProgressCached, _sales, currentPeriod, amount, userStakedBalance);
+
+        //calculate payments
+        uint256 amountToPay = _calculatePayment(amountToBuy, currentPeriod, fundingInfoCached, raiseStructureCached);
 
         // 4. update state
-         if(currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
-            
-            _whitelistPurchases[msg.sender] += amountToBuy;  
-            raiseProgressCached.whitelistRoundAllocationSold += amountToBuy; 
-
-            raiseProgressCached.whitelistRoundCapitalRaised += amountToBuy;   
-            // emit
-        } 
-        
-        if (currentPeriod == DataTypes.Period.PUBLIC) {
-            
-            _publicPurchases[msg.sender] += amountToBuy;
-            raiseProgressCached.publicRoundAllocationSold += amountToBuy;  
-
-            raiseProgressCached.publicRoundCapitalRaised += amountToBuy;   
-            // emit
-        }
+        _updateState(amountToPay, amountToBuy, currentPeriod, raiseProgressCached);
 
         // 5. transfers
-        _transferIn(amountToBuy, fundingInfoCached.raiseInNative, fundingInfoCached.raiseCurrency);
-            //raiseProgressCached.capitalRaisedInPledge += ;  
+        _transferIn(amountToBuy, fundingInfoCached.raiseCurrency);
 
     }
 
@@ -100,7 +76,7 @@ contract Raise {
     function claim() external {}
 
     // cache structs into mem
-    function _cache() internal returns(DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructure, DataTypes.raiseProgress memory raiseProgress) {
+    function _cache() internal pure returns(DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructure, DataTypes.raiseProgress memory raiseProgress) {
  
         DataTypes.fundingInfo memory fundingInfoCached = fundingInfo;
         DataTypes.raiseStructure memory raiseStructureCached = raiseStructure;
@@ -110,7 +86,7 @@ contract Raise {
     }
 
     // check what period we are in
-    function _getPeriod(DataTypes.raiseStructure memory raiseStructureCached) internal returns(DataTypes.Period) {
+    function _getPeriod(DataTypes.raiseStructure memory raiseStructureCached) internal view returns(DataTypes.Period) {
 
         DataTypes.RaiseMode raiseMode = raiseStructureCached.raiseMode;
         
@@ -177,20 +153,90 @@ contract Raise {
         return (userBalance >= whitelistMinRequiredTokens, userBalance);
     }
 
-        // get payment
-    function _transferIn(uint256 amount, bool raiseInNative, address currency) internal {
+    // calculate payment: precision
+    ///@param amount ICO Token amount
+    function _calculatePayment(uint256 amount, DataTypes.Period currentPeriod, DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructureCached) internal pure returns (uint256){
         
+        uint256 price;
+        if (currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
+            price = raiseStructureCached.whitelistAllocationUnitPrice;
+        }
+
+        if (currentPeriod == DataTypes.Period.PUBLIC) {
+            price = raiseStructureCached.publicAllocationUnitPrice;
+        }
+
+        uint256 raiseCurrencyDecimals = fundingInfo.raiseCurrencyDecimals;
+        uint256 amountToPay = (price * amount) / raiseCurrencyDecimals;
+
+        return (amountToPay);
+    }
+
+    function _updateState(
+        uint256 amountToPay,
+        uint256 amountToBuy,
+        DataTypes.Period currentPeriod,
+        DataTypes.raiseProgress memory raiseProgressCached
+        ) internal {
+        
+        // get user's sales order
+        //DataTypes.SalesOrder memory userSales = _sales[msg.sender];
+
+        if(currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
+            
+            _sales[msg.sender].whitelistAmount += amountToBuy;  
+
+            raiseProgressCached.whitelistRoundAllocationSold += amountToBuy; 
+            raiseProgressCached.whitelistRoundCapitalRaised += amountToPay;   
+            
+            // emit
+        } 
+        
+        if (currentPeriod == DataTypes.Period.PUBLIC) {
+            
+            _sales[msg.sender].publicAmount += amountToBuy;  
+
+            raiseProgressCached.publicRoundAllocationSold += amountToBuy;  
+            raiseProgressCached.publicRoundCapitalRaised += amountToPay;   
+            
+            // emit
+        }
+
+    }
+
+        // get payment
+    function _transferIn(uint256 amount, address currency) internal {
+        
+        IERC20(currency).safeTransferFrom(msg.sender, address(this), amount);
+    }
+
+/*
+    function _checkPayment(DataTypes.fundingInfo calldata fundingInfoCached, paymentAmount) internal {
+        // Check payment mode && check user's amount
+        if(fundingInfoCached.raiseInNative == true) {
+            // paying in native 
+            require(msg.value > 0, "Invalid msg.value");
+            paymentAmount = msg.value;
+
+        } else {
+            // paying in tokens
+            require(paymentAmount > 0);
+        }
+    }
+
+    function _dualTransfer() internal {
+            
         if (raiseInNative == true){
             require(amount <= msg.value, "Insufficient msg.value");
             
             //return excess
             uint256 remainder = msg.value - amount;
             if(remainder) msg.sender.call{value: remainder}("");
-
         } else {
-
             IERC20(currency).safeTransferFrom(msg.sender, address(this), amount);
         }
-
     }
+
+*/
+
 }

@@ -15,12 +15,11 @@ library ValidationLogic {
     function _validateBuy(
         DataTypes.raiseStructure memory raiseStructureCached,
         DataTypes.raiseProgress memory raiseProgressCached,
-        mapping(address user => uint256 amount) storage _whitelistPurchases,
-        mapping(address user => uint256 amount) storage _publicPurchases,
+        mapping(address user => DataTypes.SalesOrder salesOrder) storage _sales,     
         DataTypes.Period currentPeriod,
-        uint256 userAmount,
+        uint256 amount,
         uint256 userStakedBalance
-    ) internal returns (uint256) {
+    ) internal view returns (uint256) {
 
         //check available allocation
         uint256 availableAllocation = _getAvailableAllocation(raiseStructureCached, raiseProgressCached, currentPeriod);
@@ -29,38 +28,38 @@ library ValidationLogic {
         // check buyLimits
         (uint256 minBuy, uint256 maxBuy) = _getBuyLimits(raiseStructureCached, currentPeriod, userStakedBalance);
 
-        // in case of dust
+        // in case of leftover dust
         if (minBuy > 0) {
             minBuy = availableAllocation < minBuy ? availableAllocation : minBuy;
         }
-        require(userAmount >= minBuy, "userAmount dishonors minBuy");
+        require(amount >= minBuy, "amount dishonors minBuy");
 
         // check if incoming + prior buy: has user exceeded maxBuy
         uint256 bought;
         if (currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
-            bought = _whitelistPurchases[msg.sender];
+            bought = _sales[msg.sender].whitelistAmount;
         }
 
         if (currentPeriod == DataTypes.Period.PUBLIC) {
-            bought = _publicPurchases[msg.sender];
+            bought = _sales[msg.sender].publicAmount;
         }
 
         if(maxBuy > 0){
-            uint256 userRemaining = maxBuy - (bought + userAmount);
-            require(userRemaining > 0, "userAmount dishonors maxBuy");
+            uint256 userRemaining = maxBuy - (bought + amount);
+            require(userRemaining > 0, "amount dishonors maxBuy");
             
             // rebase userAmount to remainder
-            userAmount = userAmount > userRemaining ? userRemaining : userAmount;
+            amount = amount > userRemaining ? userRemaining : amount;
         }
 
-        return userAmount;
+        return amount;
     }
 
     function _getAvailableAllocation(
         DataTypes.raiseStructure memory raiseStructureCached,
         DataTypes.raiseProgress memory raiseProgressCached,
         DataTypes.Period currentPeriod
-    ) internal returns (uint256) {
+    ) internal pure returns (uint256) {
 
         uint256 availableAllocation;
 
@@ -83,7 +82,7 @@ library ValidationLogic {
         DataTypes.raiseStructure memory raiseStructureCached,
         DataTypes.Period period,
         uint256 userStakedBalance
-    ) internal returns (uint256, uint256) {
+    ) internal pure returns (uint256, uint256) {
         uint256 minBuy;
         uint256 maxBuy;
 
@@ -110,30 +109,4 @@ library ValidationLogic {
         }
     }
 
-    function _updateState(
-        uint256 amountToBuy,
-        DataTypes.Period currentPeriod, 
-        mapping(address user => uint256 amount) storage _whitelistPurchases,
-        mapping(address user => uint256 amount) storage _publicPurchases
-    ) internal {
-
-        if(currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
-            
-            _whitelistPurchases[msg.sender] += amountToBuy;  
-            raiseProgressCached.whitelistRoundAllocationSold += amountToBuy; 
-
-            raiseProgressCached.whitelistRoundCapitalRaised += amountToBuy;   
-            // emit
-        } 
-        
-        if (currentPeriod == DataTypes.Period.PUBLIC) {
-            
-            _publicPurchases[msg.sender] += amountToBuy;
-            raiseProgressCached.publicRoundAllocationSold += amountToBuy;  
-
-            raiseProgressCached.publicRoundCapitalRaised += amountToBuy;   
-            // emit
-        }
-
-    }
 }
