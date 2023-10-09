@@ -79,14 +79,6 @@ library DataTypes {
         uint256 totalCapitalRaised;   // in raise cccy
     }
 
-    struct SalesOrder {
-        uint256 whitelistAmount;
-        uint256 publicAmount;
-        //uint256 total;
-        uint256 capitalCommitted;
-        //bool hasReturnedFund;
-    }
-
     enum RaiseMode {
         WHITELIST_THEN_PUBLIC,    // 0
         WHITELIST_ONLY,         // 1
@@ -110,4 +102,45 @@ library DataTypes {
         ENDED
     }
 
+
+    /*//////////////////////////////////////////////////////////////
+                                 SALES
+    //////////////////////////////////////////////////////////////*/
+
+        struct SalesOrder {
+        uint256 whitelistAmount;
+        uint256 publicAmount;
+        //uint256 total;
+        uint256 capitalCommitted;
+        //bool fundsReturned;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                VESTING
+    //////////////////////////////////////////////////////////////*/
+
+    enum EmissionType {
+        Linear,
+        Dynamic
+    }
+
+    struct EmissionInfo {
+        uint256 startTime;
+        uint256[] periods;              // series of time deltas to be added to startTime. series of distances from startTime
+        uint256[] percentages;
+        EmissionType emissionType;
+    }
+    
+    struct RedemptionInfo {
+        uint256 percentageRedeemed;      // redeemed to date
+        bool[] redeemedPeriods;         // applicable for Dynamic-pattern distribution. False: unclaimed
+    }
+
+    struct Vesting {
+        uint256 capitalRaised;               // capital raised in raiseCCY
+        EmissionInfo tokenEmissionInfo;      // for users to collect tokens
+        EmissionInfo capitalEmissionInfo;    // for fundraisers to collect capital
+    }
+
+    //struct LinearRedemption 
 }

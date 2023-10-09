@@ -8,6 +8,7 @@ import "src/interfaces/IFundingFactory.sol";
 
 import {DataTypes} from "src/launchpad/DataTypes.sol";
 import {ValidationLogic} from "src/libraries/ValidationLogic.sol";
+import {VestingLogic} from "src/libraries/VestingLogic.sol";
 import {Errors} from "src/libraries/Error.sol";
 
 // coin: external project's token | token: staked launchpad token
@@ -31,11 +32,19 @@ contract Raise {
     // Record of user's purchases:unit in ICO tokens 
     mapping(address user => DataTypes.SalesOrder salesOrder) internal _sales;     
     
+    // Vesting & Redemptions
+    DataTypes.Vesting internal _vesting;
+    mapping(address user => DataTypes.RedemptionInfo) internal _usersRedemptionInfo;
+    mapping(address user => DataTypes.RedemptionInfo) internal _teamRedemptionInfo;
+
+    //EVENTS
+
+
     // commit funding in ether or specified ccy
     // create a buy for each period
     // cache required variables based on mode, then pass into the buy()
     ///@param amount Amount of ICO Tokens to buy
-    function buy(uint256 amount) external payable {
+    function subscribe(uint256 amount) external payable {
         //getState: fund raise must be active: not paused, not ended
         //require(_isActive(), "Not active"); 
 
@@ -73,7 +82,25 @@ contract Raise {
     }
 
     // for users to collect their ICO tokens as per vesting
-    function claim() external {}
+    function redeem() external {
+        
+        VestingLogic._redeem(true);
+        // emit TokensClaimed
+    }
+
+    // need modifier: onlyCampanginOwner
+    function collectCapital() external {
+        VestingLogic._redeem(false);
+
+        // emit FundsClaimed
+    }
+
+    function finishUp() external {
+        //remove fees
+        // store raiseAmt - fees intor Vesting.team
+    }
+
+    function refund() external {}
 
     // cache structs into mem
     function _cache() internal pure returns(DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructure, DataTypes.raiseProgress memory raiseProgress) {

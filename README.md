@@ -64,3 +64,11 @@
 - add invariant test function
 - called after deployment to check global relations
 whitelistStart < publicStart
+
+- add fn to allow team to chajnge their redemption wallet address
+- this will justify the mapping
+
+
+# Getter functions
+- create getLinearDistribution
+--> it will need to return more than releasePct
