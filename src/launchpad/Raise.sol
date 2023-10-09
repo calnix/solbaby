@@ -35,7 +35,7 @@ contract Raise {
     // Vesting & Redemptions
     DataTypes.Vesting internal _vesting;
     mapping(address user => DataTypes.RedemptionInfo) internal _usersRedemptionInfo;
-    mapping(address user => DataTypes.RedemptionInfo) internal _teamRedemptionInfo;
+    mapping(address user => DataTypes.RedemptionInfo) internal _teamRedemptionInfo; //in-case they change multisig
 
     //EVENTS
 

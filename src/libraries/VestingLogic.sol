@@ -20,9 +20,19 @@ library VestingLogic {
     //////////////////////////////////////////////////////////////*/
 
     ///@param isTokens True: user collecting tokens from raise, False: ICO team to collect raised capital
-    function _redeem(bool isTokens) internal {
+    function _redeem(
+        mapping(address user => DataTypes.RedemptionInfo) storage _usersRedemptionInfo,
+        mapping(address user => DataTypes.RedemptionInfo) storage _teamRedemptionInfo,
+        DataTypes.Vesting storage _vesting, 
+        address user, 
+        bool isTokens
+    ) 
+        internal 
+    {
+
         //will return 0 if conditions fail
-        //uint256 claimablePercentage =_updateDistribution();
+        uint256 redeemablePercentage =_updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, user, isTokens);
+
         //require(redeemablePercentage > 0);
     }
 
@@ -42,18 +52,32 @@ library VestingLogic {
         DataTypes.EmissionInfo memory emissionInfo = isTokens ? _vesting.tokenEmissionInfo : _vesting.capitalEmissionInfo;
         DataTypes.RedemptionInfo memory redemptionInfo = isTokens ? _usersRedemptionInfo[user] : _teamRedemptionInfo[user];
 
-        //get claimablePercentage as per distribution type
+        //get redeemablePercentage: if linear
         if(emissionInfo.emissionType == DataTypes.EmissionType.Linear){
             redeemablePercentage = _getLinearDistribution(emissionInfo, redemptionInfo);
+            
+            //update
+            redemptionInfo.percentageRedeemed += redeemablePercentage;
         }
 
+        //get redeemablePercentage + update: if dynamic
         if(emissionInfo.emissionType == DataTypes.EmissionType.Dynamic){
-            redeemablePercentage = _getDynamicDistribution(emissionInfo, redemptionInfo);
-        }
-        
-        //update RedemptionInfo: totalRedeemed, redeemedSchedule (if dynamic)
-        redemptionInfo.percentageRedeemed += redeemablePercentage;
+            uint256 startIndex;
+            uint256 redeemableIndexes;
+            (redeemablePercentage, redeemableIndexes, startIndex) = _getDynamicDistribution(emissionInfo, redemptionInfo);
+            
+            // update state for dynamic
+            if(redeemableIndexes > 0){
+                require(startIndex == redemptionInfo.redeemedPeriods.length, " ");
+                uint256 endIndex = startIndex + redeemableIndexes - 1;   
 
+                for(uint256 n = startIndex; n < endIndex; n++){
+                    // mark as redeemed
+                    redemptionInfo.redeemedPeriods.push(true);   
+                }
+            }
+        }
+                
         return redeemablePercentage;
     }
 
@@ -78,7 +102,7 @@ library VestingLogic {
         return redeemablePercentage;
     }
 
-    function _getDynamicDistribution(DataTypes.EmissionInfo memory emissionInfo, DataTypes.RedemptionInfo memory redemptionInfo) internal returns(uint256) { 
+    function _getDynamicDistribution(DataTypes.EmissionInfo memory emissionInfo, DataTypes.RedemptionInfo memory redemptionInfo) internal returns(uint256, uint256, uint256) { 
         // pre-check
         if (
             emissionInfo.emissionType != DataTypes.EmissionType.Dynamic || 
@@ -111,7 +135,7 @@ library VestingLogic {
                 break;
             }
         }    
-        return redeemablePercentage;
+        return (redeemablePercentage, redeemableIndexes, startIndex);
     }
 
     // False: unclaimed
