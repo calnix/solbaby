@@ -84,13 +84,13 @@ contract Raise {
     // for users to collect their ICO tokens as per vesting
     function redeem() external {
         
-        VestingLogic._redeem(true);
+        VestingLogic._redeem(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
         // emit TokensClaimed
     }
 
     // need modifier: onlyCampanginOwner
     function collectCapital() external {
-        VestingLogic._redeem(false);
+        VestingLogic._redeem(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, false);
 
         // emit FundsClaimed
     }

@@ -50,7 +50,7 @@ library VestingLogic {
 
         // get appropriate emissionInfo + redemptionInfo
         DataTypes.EmissionInfo memory emissionInfo = isTokens ? _vesting.tokenEmissionInfo : _vesting.capitalEmissionInfo;
-        DataTypes.RedemptionInfo memory redemptionInfo = isTokens ? _usersRedemptionInfo[user] : _teamRedemptionInfo[user];
+        DataTypes.RedemptionInfo storage redemptionInfo = isTokens ? _usersRedemptionInfo[user] : _teamRedemptionInfo[user];
 
         //get redeemablePercentage: if linear
         if(emissionInfo.emissionType == DataTypes.EmissionType.Linear){
@@ -110,7 +110,7 @@ library VestingLogic {
             block.timestamp < emissionInfo.startTime
         ) {
             
-            return 0;
+            return (0, 0, 0);
         }
 
         // get user's remaining claimable periods
