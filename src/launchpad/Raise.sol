@@ -21,7 +21,6 @@ contract Raise {
     using SafeERC20 for IERC20;
 
     //external contracts
-    IERC20 public assetToken;
     IERC20 public stakingToken;
 
     address public treasury; 
@@ -96,7 +95,7 @@ contract Raise {
         uint256 redeemableTokens = totalTokens * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
 
         // transfer
-        assetToken.safeTransfer(msg.sender, redeemableTokens);
+        IERC20(_fundingInfo.asset).safeTransfer(msg.sender, redeemableTokens);
         
         // emit TokensClaimed
     }
