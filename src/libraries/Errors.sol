@@ -7,6 +7,10 @@ library Errors {
     error RaiseEnded();
     error NothingToRedeem();
 
+    error RaiseActive();
+    error RaiseFailed();
+    error ZeroCapital();
+
     enum Code {
         ValidationError,
         NoBasicSetup,

@@ -12,24 +12,28 @@ import { VestingLogic } from "src/libraries/VestingLogic.sol";
 import { ValidationLogic } from "src/libraries/ValidationLogic.sol";
 import { PercentageMath } from "src/libraries/PercentageMath.sol";
 
-import "src/interfaces/IFundingFactory.sol";
+//import "src/interfaces/IFundingFactory.sol";
 
 // coin: external project's token | token: staked launchpad token
 
 contract Raise {
     using SafeERC20 for ERC20;
     using SafeERC20 for IERC20;
+    using PercentageMath for uint256;
 
     //external contracts
     IERC20 public stakingToken;
 
     address public treasury; 
-    IFundingFactory public factory;  
+    //IFundingFactory public factory;  
     
     // Funding + Raise + Progess
     DataTypes.fundingInfo internal _fundingInfo;
     DataTypes.raiseStructure internal _raiseStructure;
     DataTypes.raiseProgress internal _raiseProgress;
+
+    // Raise State
+    DataTypes.State internal _raiseState;
 
     // Record of user's purchases:unit in ICO tokens 
     mapping(address user => DataTypes.Sale sale) internal _sales;     
@@ -76,7 +80,7 @@ contract Raise {
         uint256 amountToPay = _calculatePayment(amountToBuy, currentPeriod, fundingInfoCached, raiseStructureCached);
 
         // 4. update state
-        _updateState(amountToPay, amountToBuy, currentPeriod, raiseProgressCached);
+        _updateProgress(amountToPay, amountToBuy, currentPeriod, raiseProgressCached);
 
         // 5. transfers
         IERC20(fundingInfoCached.fundingToken).safeTransferFrom(msg.sender, address(this), amount);
@@ -95,14 +99,15 @@ contract Raise {
         uint256 redeemableTokens = totalTokens * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
 
         // transfer
-        IERC20(_fundingInfo.asset).safeTransfer(msg.sender, redeemableTokens);
+        IERC20(_fundingInfo.assetToken).safeTransfer(msg.sender, redeemableTokens);
         
         // emit TokensClaimed
     }
 
     // need modifier: onlyCampanginOwner
     function redeemCapital() external {
-        
+        require(_fundingInfo.fundRaiser == msg.sender, "Only Fund Raiser");
+
         uint256 redeemablePercentage = VestingLogic._updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
         if(redeemablePercentage == 0) revert Errors.NothingToRedeem();
 
@@ -111,15 +116,67 @@ contract Raise {
         uint256 redeemableCapital = totalRaised * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
 
         // transfer
-        //assetToken.safeTransfer(msg.sender, redeemableTokens);
+        IERC20(_fundingInfo.assetToken).safeTransfer(msg.sender, redeemableCapital);
         
         // emit FundsClaimed
-        
     }
 
-    function finishUp() external {
-        //remove fees
-        // store raiseAmt - fees intor Vesting.team
+    //Note: can only be called once
+    function closeRound() external {
+        //cache
+
+        DataTypes.Period period = _getPeriod(_raiseStructure);
+        uint256 capitalRaised = _raiseProgress.totalCapitalRaised;
+        uint256 hardCap = _fundingInfo.hardCap;
+        uint256 softCap = _fundingInfo.softCap;
+
+        // updateState: raise must have ended || hardcap reached
+        if (capitalRaised >= hardCap || period != DataTypes.Period.END) {
+            _raiseState = DataTypes.State.COMPLETED;
+        }
+        
+        // updateState: raise must exceed softCap && time exceeded
+        if (capitalRaised >= softCap && period == DataTypes.Period.END) {
+            _raiseState = DataTypes.State.COMPLETED;
+        } 
+
+        // failed: softCap not hit && time exceeded
+        if (capitalRaised < softCap && period == DataTypes.Period.END) {
+            _raiseState = DataTypes.State.FAILED;
+        }
+
+        // completed: charge fees 
+        if(_raiseState == DataTypes.State.COMPLETED) {
+            
+            // collect fees
+            uint256 feePercent = _fundingInfo.feePercent;
+            uint256 feeChargeable = capitalRaised.percentMul(feePercent);
+
+            // transfer fees
+            IERC20(_fundingInfo.fundingToken).safeTransfer(treasury, feeChargeable);
+        }
+
+        // failed: no fees charged, return assetTokens
+        if(_raiseState == DataTypes.State.FAILED){
+            
+            // return assetTokens
+            IERC20(_fundingInfo.assetToken).safeTransfer(_fundingInfo.fundRaiser, _fundingInfo.assetAllocation);
+        }
+
+    }
+
+    //failed: user to collect back capital
+    function retrieveCapital() external {
+        if(_raiseState != DataTypes.State.FAILED) revert Errors.RaiseFailed();
+
+        uint256 userCapital = _sales[msg.sender].capitalCommitted;
+        if(userCapital == 0) revert Errors.ZeroCapital();
+
+        // reset
+        _sales[msg.sender].capitalCommitted == 0;
+        
+        //transfer
+        IERC20(_fundingInfo.fundingToken).safeTransfer(msg.sender, userCapital);
     }
 
     function refund() external {}
@@ -135,20 +192,22 @@ contract Raise {
     }
 
     // check what period we are in
-    function _getPeriod(DataTypes.raiseStructure memory raiseStructureCached) internal view returns(DataTypes.Period) {
-
-        DataTypes.RaiseMode raiseMode = raiseStructureCached.raiseMode;
+    function _getPeriod(DataTypes.raiseStructure memory raiseStructure) internal view returns(DataTypes.Period) {
         
+        // check start and end
+        if (block.timestamp < raiseStructure.startTime) return DataTypes.Period.PENDING_START;
+        if (block.timestamp > raiseStructure.endTime) return DataTypes.Period.END;
+
         //whitelist
-        uint256 whitelistStart = raiseStructureCached.whitelistStart;
-        uint256 whitelistFFAStart = raiseStructureCached.whitelistFFAStart;
-        uint256 whitelistEnd = raiseStructureCached.whitelistEnd;
+        uint256 whitelistStart = raiseStructure.whitelistStart;
+        uint256 whitelistFFAStart = raiseStructure.whitelistFFAStart;
+        uint256 whitelistEnd = raiseStructure.whitelistEnd;
 
         //public
-        uint256 publicStart = raiseStructureCached.publicStart;
-        uint256 publicEnd = raiseStructureCached.publicEnd;
+        uint256 publicStart = raiseStructure.publicStart;
+        uint256 publicEnd = raiseStructure.publicEnd;
 
-        if (raiseMode == DataTypes.RaiseMode.WHITELIST_THEN_PUBLIC) {
+        if (raiseStructure.raiseMode == DataTypes.RaiseMode.WHITELIST_THEN_PUBLIC) {
             // validate blocktime
             require(whitelistStart <= block.timestamp && block.timestamp <= publicEnd, "Invalid Period");
 
@@ -168,7 +227,7 @@ contract Raise {
             }
         }
 
-        if(raiseMode == DataTypes.RaiseMode.WHITELIST_ONLY) {
+        if(raiseStructure.raiseMode == DataTypes.RaiseMode.WHITELIST_ONLY) {
             // validate blocktime
             require(whitelistStart <= block.timestamp && block.timestamp <= whitelistEnd, "Invalid Period");
 
@@ -183,14 +242,14 @@ contract Raise {
             }
         }
 
-        if(raiseMode == DataTypes.RaiseMode.PUBLIC_ONLY) {               
+        if(raiseStructure.raiseMode == DataTypes.RaiseMode.PUBLIC_ONLY) {               
             require(publicStart <= block.timestamp && block.timestamp <= publicEnd, "Invalid Period");
             return DataTypes.Period.PUBLIC;
         }
     }
 
     // check if user has at least minRequiredTokens
-    function _checkRequiredTokens(address user, uint256 whitelistMinRequiredTokens) public view returns(bool, uint256) {
+    function _checkRequiredTokens(address user, uint256 whitelistMinRequiredTokens) internal view returns(bool, uint256) {
         
         uint256 userBalance = stakingToken.balanceOf(user);
 
@@ -204,15 +263,15 @@ contract Raise {
 
     // calculate payment: precision
     ///@param amount ICO Token amount
-    function _calculatePayment(uint256 amount, DataTypes.Period currentPeriod, DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructureCached) internal pure returns (uint256){
+    function _calculatePayment(uint256 amount, DataTypes.Period currentPeriod, DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructure) internal pure returns (uint256){
         
         uint256 price;
         if (currentPeriod == DataTypes.Period.WHITELIST_GUARANTEED || currentPeriod == DataTypes.Period.WHITELIST_FFA) {
-            price = raiseStructureCached.whitelistAllocationUnitPrice;
+            price = raiseStructure.whitelistAllocationUnitPrice;
         }
 
         if (currentPeriod == DataTypes.Period.PUBLIC) {
-            price = raiseStructureCached.publicAllocationUnitPrice;
+            price = raiseStructure.publicAllocationUnitPrice;
         }
 
         uint256 fundingTokenDecimals = fundingInfo.fundingTokenDecimals;
@@ -221,7 +280,7 @@ contract Raise {
         return (amountToPay);
     }
 
-    function _updateState(
+    function _updateProgress(
         uint256 amountToPay,
         uint256 amountToBuy,
         DataTypes.Period currentPeriod,
@@ -252,7 +311,6 @@ contract Raise {
         }
 
     }
-
 
 /*
     function _checkPayment(DataTypes.fundingInfo calldata fundingInfoCached, paymentAmount) internal {

@@ -10,12 +10,14 @@ library DataTypes {
 
     struct fundingInfo {                
         // segments
-        uint256 whitelistDuration;   //ignored if public_mode
-        uint256 publicDuration;
-        uint256 startTime;
+        //uint256 startTime;
+        //uint256 endTime;
+        //uint256 whitelistDuration;   //ignored if public_mode
+        //uint256 publicDuration;
+        address fundRaiser;
 
         // ICO token: asset
-        address asset;     
+        address assetToken;     
         uint256 assetDecimals;        // precision
         uint256 assetAllocation;      // Total tokens for sales
 
@@ -39,6 +41,11 @@ library DataTypes {
 
     struct raiseStructure {
         RaiseMode raiseMode;        //uint8
+
+        uint256 startTime;
+        uint256 endTime;
+        uint256 whitelistDuration;   //ignored if public_mode
+        uint256 publicDuration;
 
         // whitelist-guaranteed
         uint256 whitelistStart;
@@ -106,7 +113,8 @@ library DataTypes {
         PAUSED,
         REFUNDED,
         CANCELLED,
-        ENDED
+        COMPLETED,
+        FAILED
     }
 
 

@@ -65,7 +65,7 @@
 - called after deployment to check global relations
 whitelistStart < publicStart
 
-- add fn to allow team to chajnge their redemption wallet address
+- add fn to allow team to change their redemption wallet address
 - this will justify the mapping
 
 
