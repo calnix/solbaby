@@ -5,6 +5,7 @@ pragma solidity ^0.8.10;
 library Errors {
 
     error RaiseEnded();
+    error NothingToRedeem();
 
     enum Code {
         ValidationError,

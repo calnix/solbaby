@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.19;
 
+import { Errors } from "src/libraries/Errors.sol";
 import { DataTypes } from "src/launchpad/DataTypes.sol";
 import { PercentageMath } from "src/libraries/PercentageMath.sol";
 
@@ -18,23 +19,6 @@ library VestingLogic {
     /*//////////////////////////////////////////////////////////////
                                  CLAIMS
     //////////////////////////////////////////////////////////////*/
-
-    ///@param isTokens True: user collecting tokens from raise, False: ICO team to collect raised capital
-    function _redeem(
-        mapping(address user => DataTypes.RedemptionInfo) storage _usersRedemptionInfo,
-        mapping(address user => DataTypes.RedemptionInfo) storage _teamRedemptionInfo,
-        DataTypes.Vesting storage _vesting, 
-        address user, 
-        bool isTokens
-    ) 
-        internal 
-    {
-
-        //will return 0 if conditions fail
-        uint256 redeemablePercentage =_updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, user, isTokens);
-
-        //require(redeemablePercentage > 0);
-    }
 
     // update left to collect
     function _updateDistribution(

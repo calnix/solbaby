@@ -11,7 +11,7 @@ library ValidationLogic {
     function _validateBuy(
         DataTypes.raiseStructure memory raiseStructureCached,
         DataTypes.raiseProgress memory raiseProgressCached,
-        mapping(address user => DataTypes.SalesOrder salesOrder) storage _sales,     
+        mapping(address user => DataTypes.Sale sale) storage _sales,     
         DataTypes.Period currentPeriod,
         uint256 amount,
         uint256 userStakedBalance

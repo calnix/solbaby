@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: Unlicensed
 pragma solidity ^0.8.19;
 
-import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
-import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
-import "src/interfaces/IFundingFactory.sol";
+import { IERC20 } from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import { SafeERC20 } from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
-import {DataTypes} from "src/launchpad/DataTypes.sol";
-import {ValidationLogic} from "src/libraries/ValidationLogic.sol";
-import {VestingLogic} from "src/libraries/VestingLogic.sol";
-import {Errors} from "src/libraries/Error.sol";
+import { DataTypes } from "src/launchpad/DataTypes.sol";
+
+import { Errors } from "src/libraries/Errors.sol";
+import { VestingLogic } from "src/libraries/VestingLogic.sol";
+import { ValidationLogic } from "src/libraries/ValidationLogic.sol";
+import { PercentageMath } from "src/libraries/PercentageMath.sol";
+
+import "src/interfaces/IFundingFactory.sol";
 
 // coin: external project's token | token: staked launchpad token
 
@@ -30,7 +33,7 @@ contract Raise {
     DataTypes.raiseProgress internal _raiseProgress;
 
     // Record of user's purchases:unit in ICO tokens 
-    mapping(address user => DataTypes.SalesOrder salesOrder) internal _sales;     
+    mapping(address user => DataTypes.Sale sale) internal _sales;     
     
     // Vesting & Redemptions
     DataTypes.Vesting internal _vesting;
@@ -77,22 +80,42 @@ contract Raise {
         _updateState(amountToPay, amountToBuy, currentPeriod, raiseProgressCached);
 
         // 5. transfers
-        _transferIn(amountToBuy, fundingInfoCached.raiseCurrency);
+        IERC20(fundingInfoCached.fundingToken).safeTransferFrom(msg.sender, address(this), amount);
 
     }
 
     // for users to collect their ICO tokens as per vesting
-    function redeem() external {
+    function redeemTokens() external {
         
-        VestingLogic._redeem(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
+        uint256 redeemablePercentage = VestingLogic._updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
+        if(redeemablePercentage == 0) revert Errors.NothingToRedeem();
+
+        DataTypes.Sale memory sale = _sales[msg.sender];
+            
+        uint256 totalTokens = sale.whitelistAmount + sale.publicAmount;
+        uint256 redeemableTokens = totalTokens * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
+
+        // transfer
+        assetToken.safeTransfer(msg.sender, redeemableTokens);
+        
         // emit TokensClaimed
     }
 
     // need modifier: onlyCampanginOwner
-    function collectCapital() external {
-        VestingLogic._redeem(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, false);
+    function redeemCapital() external {
+        
+        uint256 redeemablePercentage = VestingLogic._updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
+        if(redeemablePercentage == 0) revert Errors.NothingToRedeem();
 
+        // get redeemableCapital
+        uint256 totalRaised = _raiseProgress.totalCapitalRaised;
+        uint256 redeemableCapital = totalRaised * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
+
+        // transfer
+        //assetToken.safeTransfer(msg.sender, redeemableTokens);
+        
         // emit FundsClaimed
+        
     }
 
     function finishUp() external {
@@ -193,8 +216,8 @@ contract Raise {
             price = raiseStructureCached.publicAllocationUnitPrice;
         }
 
-        uint256 raiseCurrencyDecimals = fundingInfo.raiseCurrencyDecimals;
-        uint256 amountToPay = (price * amount) / raiseCurrencyDecimals;
+        uint256 fundingTokenDecimals = fundingInfo.fundingTokenDecimals;
+        uint256 amountToPay = (price * amount) / fundingTokenDecimals;
 
         return (amountToPay);
     }
@@ -231,11 +254,6 @@ contract Raise {
 
     }
 
-        // get payment
-    function _transferIn(uint256 amount, address currency) internal {
-        
-        IERC20(currency).safeTransferFrom(msg.sender, address(this), amount);
-    }
 
 /*
     function _checkPayment(DataTypes.fundingInfo calldata fundingInfoCached, paymentAmount) internal {
@@ -259,7 +277,7 @@ contract Raise {
             //return excess
             uint256 remainder = msg.value - amount;
             if(remainder) msg.sender.call{value: remainder}("");
-        } else {
+        } else {    
             IERC20(currency).safeTransferFrom(msg.sender, address(this), amount);
         }
     }

@@ -4,6 +4,10 @@ pragma solidity ^0.8.19;
 
 library DataTypes {
 
+    /*//////////////////////////////////////////////////////////////
+                            RAISE PARAMETERS
+    //////////////////////////////////////////////////////////////*/
+
     struct fundingInfo {        
         RaiseMode raiseMode;        //uint8
         
@@ -27,8 +31,8 @@ library DataTypes {
         
         // financing
         //bool raiseInNative;                 // can remove - potentially
-        address raiseCurrency;                // raise currency, if not raising in ether
-        uint256 raiseCurrencyDecimals;        // precision
+        address fundingToken;                // raise currency, if not raising in ether
+        uint256 fundingTokenDecimals;        // precision
 
         // fees
         address stkTokenAddress;    // stkToken - for pledgers
@@ -63,6 +67,16 @@ library DataTypes {
         uint256 publicMaxBuyLimit;  
     }
 
+    enum RaiseMode {
+        WHITELIST_THEN_PUBLIC,    // 0
+        WHITELIST_ONLY,         // 1
+        PUBLIC_ONLY            // 2
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                              RAISE STATE
+    //////////////////////////////////////////////////////////////*/
+
     // live tracking
     struct raiseProgress {
         
@@ -79,11 +93,6 @@ library DataTypes {
         uint256 totalCapitalRaised;   // in raise cccy
     }
 
-    enum RaiseMode {
-        WHITELIST_THEN_PUBLIC,    // 0
-        WHITELIST_ONLY,         // 1
-        PUBLIC_ONLY            // 2
-    }
 
     // Period according to timeline
     enum Period {
@@ -107,9 +116,9 @@ library DataTypes {
                                  SALES
     //////////////////////////////////////////////////////////////*/
 
-        struct SalesOrder {
-        uint256 whitelistAmount;
-        uint256 publicAmount;
+    struct Sale {
+        uint256 whitelistAmount;    //denominated in Tokens
+        uint256 publicAmount;       //denominated in Tokens
         //uint256 total;
         uint256 capitalCommitted;
         //bool fundsReturned;
