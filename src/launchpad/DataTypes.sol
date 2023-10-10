@@ -8,10 +8,8 @@ library DataTypes {
                             RAISE PARAMETERS
     //////////////////////////////////////////////////////////////*/
 
-    struct fundingInfo {        
-        RaiseMode raiseMode;        //uint8
-        
-        // periods
+    struct fundingInfo {                
+        // segments
         uint256 whitelistDuration;   //ignored if public_mode
         uint256 publicDuration;
         uint256 startTime;

@@ -14,6 +14,7 @@ contract FundingFactory {
 
     function getStakingToken() external view {}
 
+/*
     function createRaise(DataTypes.fundingInfo calldata fundingInfo) external {
         DataTypes.raiseStructure memory raiseStructure;
         
@@ -55,4 +56,5 @@ contract FundingFactory {
 
 
     }
+    **/
 }
