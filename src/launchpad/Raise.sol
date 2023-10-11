@@ -24,13 +24,16 @@ contract Raise {
     //external contracts
     IERC20 public stakingToken;
 
+    address public owner;
     address public treasury; 
     //IFundingFactory public factory;  
     
     // Funding + Raise + Progess
-    DataTypes.fundingInfo internal _fundingInfo;
-    DataTypes.raiseStructure internal _raiseStructure;
-    DataTypes.raiseProgress internal _raiseProgress;
+    DataTypes.FundingInfo internal _fundingInfo;
+    DataTypes.RaiseStructure internal _raiseStructure;
+    DataTypes.RaiseProgress internal _raiseProgress;
+
+    DataTypes.PostRaiseInfo internal _postRaiseInfo;
 
     // Raise State
     DataTypes.State internal _raiseState;
@@ -44,7 +47,7 @@ contract Raise {
     mapping(address user => DataTypes.RedemptionInfo) internal _teamRedemptionInfo; //in-case they change multisig
 
     //EVENTS
-
+    event FundsClaimed(uint256 amountRedeemed, uint256 amountLeft);
 
     // commit funding in ether or specified ccy
     // create a buy for each period
@@ -88,7 +91,7 @@ contract Raise {
     }
 
     // for users to collect their ICO tokens as per vesting
-    function redeemTokens() external {
+    function redeemAllocation() external {
         
         uint256 redeemablePercentage = VestingLogic._updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
         if(redeemablePercentage == 0) revert Errors.NothingToRedeem();
@@ -98,6 +101,10 @@ contract Raise {
         uint256 totalTokens = sale.whitelistAmount + sale.publicAmount;
         uint256 redeemableTokens = totalTokens * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
 
+        // update storage
+        _postRaiseInfo.allocationRedeemed += redeemableTokens;
+
+        
         // transfer
         IERC20(_fundingInfo.assetToken).safeTransfer(msg.sender, redeemableTokens);
         
@@ -106,24 +113,30 @@ contract Raise {
 
     // need modifier: onlyCampanginOwner
     function redeemCapital() external {
+        require(_raiseState == DataTypes.State.COMPLETED);
         require(_fundingInfo.fundRaiser == msg.sender, "Only Fund Raiser");
 
         uint256 redeemablePercentage = VestingLogic._updateDistribution(_usersRedemptionInfo, _teamRedemptionInfo, _vesting, msg.sender, true);
         if(redeemablePercentage == 0) revert Errors.NothingToRedeem();
 
         // get redeemableCapital
-        uint256 totalRaised = _raiseProgress.totalCapitalRaised;
+        uint256 totalRaised = _postRaiseInfo.capitalRaised;
         uint256 redeemableCapital = totalRaised * redeemablePercentage / PercentageMath.PERCENTAGE_FACTOR;
+        _postRaiseInfo.capitalRedeemed += redeemableCapital;
+
+        // invariant check
+        require(_postRaiseInfo.capitalRaised == postRaiseInfo.capitalRedeemed + postRaiseInfo.capitalRefunded);
 
         // transfer
         IERC20(_fundingInfo.assetToken).safeTransfer(msg.sender, redeemableCapital);
         
-        // emit FundsClaimed
+        emit FundsClaimed(redeemableCapital, );
     }
 
     //Note: can only be called once
     function closeRound() external {
         //cache
+        DataTypes.PostRaiseInfo memory postRaiseInfo;
 
         DataTypes.Period period = _getPeriod(_raiseStructure);
         uint256 capitalRaised = _raiseProgress.totalCapitalRaised;
@@ -151,6 +164,13 @@ contract Raise {
             // collect fees
             uint256 feePercent = _fundingInfo.feePercent;
             uint256 feeChargeable = capitalRaised.percentMul(feePercent);
+            
+            //post-raise
+            postRaiseInfo.capitalRaised = capitalRaised - feeChargeable;
+            postRaiseInfo.allocationCommitted = _raiseStructure.whitelistRoundAllocation + _raiseStructure.publicRoundAllocation;
+
+            // update storage
+            _postRaiseInfo == postRaiseInfo;
 
             // transfer fees
             IERC20(_fundingInfo.fundingToken).safeTransfer(treasury, feeChargeable);
@@ -165,7 +185,7 @@ contract Raise {
 
     }
 
-    //failed: user to collect back capital
+    //state: on failed
     function retrieveCapital() external {
         if(_raiseState != DataTypes.State.FAILED) revert Errors.RaiseFailed();
 
@@ -179,7 +199,33 @@ contract Raise {
         IERC20(_fundingInfo.fundingToken).safeTransfer(msg.sender, userCapital);
     }
 
-    function refund() external {}
+    // due to some unknown issue, rug, etc
+    function refund() external {
+        require(_raiseState == DataTypes.State.REFUND);
+
+        DataTypes.PostRaiseInfo memory postRaiseInfo;
+
+        uint256 capital = _raiseProgress.totalCapitalRaised;
+    }
+
+    // setup for refund. allow for receival of capital in the event project returns.
+    // this way refunds are not bounded to what has not been redeemed.
+    function setToRefund(uint256 capitalReturned) external {
+        require(msg.sender == owner);
+        
+        DataTypes.PostRaiseInfo memory postRaiseInfo = _postRaiseInfo;
+        
+        // freeze capital + token redemptions
+        
+        //calc total refund amounts
+        capitalLeft = postRaiseInfo.capitalRaised - postRaiseInfo.capitalRedeemed;
+        postRaiseInfo.capitalForRefund =  capitalReturned + capitalLeft;
+
+        // set state to refund
+        _raiseState == DataTypes.State.REFUND;
+
+        emit 
+    }
 
     // cache structs into mem
     function _cache() internal pure returns(DataTypes.fundingInfo memory fundingInfo, DataTypes.raiseStructure memory raiseStructure, DataTypes.raiseProgress memory raiseProgress) {

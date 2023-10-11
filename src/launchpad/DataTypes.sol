@@ -111,10 +111,10 @@ library DataTypes {
     enum State {
         ACTIVE,
         PAUSED,
-        REFUNDED,
-        CANCELLED,
-        COMPLETED,
-        FAILED
+        REFUND,     //users to be refunded
+        CANCELLED,  //deployed but not used
+        COMPLETED,  //successfully raised
+        FAILED      //did not hit softCap
     }
 
 
@@ -147,7 +147,7 @@ library DataTypes {
     }
     
     struct RedemptionInfo {
-        uint256 percentageRedeemed;      // redeemed to date
+        uint256 percentageRedeemed;     // redeemed to date
         bool[] redeemedPeriods;         // applicable for Dynamic-pattern distribution. False: unclaimed
     }
 
@@ -157,5 +157,20 @@ library DataTypes {
         EmissionInfo capitalEmissionInfo;    // for fundraisers to collect capital
     }
 
-    //struct LinearRedemption 
+    struct PostRaiseInfo {
+        // on raise end        
+        uint256 capitalRaised;          // capital less the platform fees
+        uint256 allocationCommitted;    // total allocation
+
+        // on redemptions
+        uint256 capitalRedeemed;        // redeemed by fundraiser as per vesting
+        uint256 allocationRedeemed;    
+        
+        // on refunds
+        uint256 capitalForRefund;       //in-case project returns funds for 
+        uint256 capitalRefunded;
+        
+        uint256 allocationForRefund;   
+        uint256 allocationRefunded;     
+    }
 }
