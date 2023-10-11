@@ -71,5 +71,7 @@ whitelistStart < publicStart
 
 
 # Additional features
-- lottery
-- build secondary market to trade illiquid tokens
+- lottery: chainlink vrf
+- build secondary market to trade illiquid tokens: 
+--> issue tokens as certificates, representative of vesting, lockup, etc
+--> users can trade the tokens even before TGE or vesting release; similar to forward agreements
